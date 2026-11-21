@@ -38,3 +38,9 @@ Thumbs.db
 
 # Hugging Face hosted model
 backend/xlm-roberta-base/
+backend/xlm-roberta-base-backup/
+
+backend/venv312/
+backend/__pycache__/
+*.pyc
+.env

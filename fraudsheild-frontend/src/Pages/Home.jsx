@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import ScanResult from "./ScanResult";
 import { useApp } from "./AppProvider";
-import { scanText, toSegments } from "../api";
+import { scanText, toSegments } from "../Api";
 
 // const SAMPLE = "You have won a $500 gift card! Claim your reward within 1 hour at http://claim-prize.example and send the OTP to confirm.";
 
@@ -55,7 +55,7 @@ export default function Home() {
             Checkpoint scans messages and screenshots for the tricks scammers use, and tells you in plain words what looks wrong.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link to="/scan" className="btn btn-primary">Scan a message</Link>
+            <Link to="/scan" className="btn btn-primary text-white ">Scan a message</Link>
             <Link to="/about" className="btn btn-outline">About us</Link>
           </div>
         </div>
