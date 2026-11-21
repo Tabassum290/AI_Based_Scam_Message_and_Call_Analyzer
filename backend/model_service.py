@@ -4,9 +4,12 @@ import os
 import re
 from pathlib import Path
 from typing import List
-from huggingface_hub import snapshot_download
+
 import numpy as np
 import torch
+
+from huggingface_hub import snapshot_download
+
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -17,37 +20,98 @@ from transformers import (
 # 1. MODEL CONFIGURATION
 # ============================================================
 
-MODEL_DIR = Path(
+HF_MODEL_REPO = os.getenv(
+    "HF_MODEL_REPO",
+    "tabassum02/fraudshield-model"
+)
+
+HF_TOKEN = os.getenv("HF_TOKEN") or None
+
+# Optional local model directory
+LOCAL_MODEL_DIR = Path(
     os.getenv(
         "MODEL_DIR",
-        str(Path(__file__).parent / "xlm-roberta-base"),
+        str(Path(__file__).parent / "xlm-roberta-base")
     )
 )
 
-META_FILE = MODEL_DIR / "scamdetect.json"
+# CPU inference
+DEVICE = torch.device("cpu")
 
-if not MODEL_DIR.exists():
-    raise FileNotFoundError(
-        f"Model directory not found: {MODEL_DIR}"
+torch.set_num_threads(1)
+
+# ============================================================
+# 2. FIND MODEL DIRECTORY
+# ============================================================
+
+if (LOCAL_MODEL_DIR / "config.json").exists():
+
+    MODEL_DIR = LOCAL_MODEL_DIR
+
+    print("Loading model from local directory:", MODEL_DIR)
+
+else:
+
+    print("Local model not found.")
+    print("Downloading trained model from Hugging Face...")
+    print("Repository:", HF_MODEL_REPO)
+
+    MODEL_DIR = Path(
+        snapshot_download(
+            repo_id=HF_MODEL_REPO,
+            token=HF_TOKEN,
+        )
     )
 
+    print("Hugging Face model downloaded:", MODEL_DIR)
+
+
+# Verify model files
+required_files = [
+    "config.json",
+    "model.safetensors",
+]
+
+for filename in required_files:
+
+    if not (MODEL_DIR / filename).exists():
+
+        # Some models use pytorch_model.bin
+        if filename == "model.safetensors" and (
+            MODEL_DIR / "pytorch_model.bin"
+        ).exists():
+            continue
+
+        raise FileNotFoundError(
+            f"Required model file missing: {filename}"
+        )
+
+
+# ============================================================
+# 3. LOAD MODEL METADATA
+# ============================================================
+
+META_FILE = MODEL_DIR / "scamdetect.json"
+
 META = (
-    json.loads(META_FILE.read_text(encoding="utf-8"))
+    json.loads(
+        META_FILE.read_text(encoding="utf-8")
+    )
     if META_FILE.exists()
     else {}
 )
 
-MAX_LEN = int(META.get("max_len", 128))
+MAX_LEN = int(
+    META.get("max_len", 128)
+)
 
 THRESHOLD = float(
     os.getenv("SCAM_THRESHOLD", "0.50")
 )
 
-DEVICE = torch.device("cpu")
-
 
 # ============================================================
-# 2. TEXT CLEANING
+# 4. TEXT CLEANING
 # ============================================================
 
 BN = "\u0980-\u09FF"
@@ -69,13 +133,6 @@ BN_DIGITS = str.maketrans(
 
 
 def clean(text: str) -> str:
-    """
-    Normalize message before model inference.
-
-    IMPORTANT:
-    This preprocessing must match the preprocessing
-    used during model training.
-    """
 
     text = str(text).translate(BN_DIGITS).lower()
 
@@ -97,32 +154,45 @@ def clean(text: str) -> str:
 
 
 # ============================================================
-# 3. LOAD TRAINED XLM-ROBERTA MODEL
+# 5. LOAD TRAINED XLM-ROBERTA MODEL
 # ============================================================
 
+print("Loading tokenizer...")
+
 tokenizer = AutoTokenizer.from_pretrained(
-    str(MODEL_DIR)
+    str(MODEL_DIR),
 )
 
+print("Loading trained classification model...")
+
 model = AutoModelForSequenceClassification.from_pretrained(
-    str(MODEL_DIR)
+    str(MODEL_DIR),
 )
 
 model = model.to(DEVICE).float().eval()
 
+print("Model loaded into CPU memory.")
+
+
+# ============================================================
+# 6. LOAD LABELS
+# ============================================================
+
 id2label = model.config.id2label
 
 LABELS = [
-    id2label[i] if i in id2label else id2label[str(i)]
+    id2label.get(i, id2label.get(str(i)))
     for i in range(model.config.num_labels)
 ]
 
 if len(LABELS) != 9:
+
     raise ValueError(
         f"Expected 9 classes, found {len(LABELS)}"
     )
 
 if "legit" not in LABELS:
+
     raise ValueError(
         f"'legit' label missing: {LABELS}"
     )
@@ -144,11 +214,8 @@ TYPE_NAMES = {
 
 
 # ============================================================
-# 4. SEXTORTION DETECTION
+# 7. SEXTORTION DETECTION
 # ============================================================
-
-# This detector is used only for additional warning flags.
-# It DOES NOT override the ML model prediction.
 
 SEXTORTION_PATTERNS = [
 
@@ -196,13 +263,14 @@ def is_sextortion(text: str) -> bool:
 
 
 # ============================================================
-# 5. MODEL PROBABILITIES
+# 8. MODEL PROBABILITIES
 # ============================================================
 
 @torch.inference_mode()
 def probs(texts: List[str], batch_size: int = 32):
 
     if not texts:
+
         return np.empty(
             (0, len(LABELS)),
             dtype=np.float32,
@@ -247,7 +315,7 @@ def probs(texts: List[str], batch_size: int = 32):
 
 
 # ============================================================
-# 6. SCAM HIGHLIGHTS
+# 9. SCAM HIGHLIGHTS
 # ============================================================
 
 WORD = re.compile(r"\S+")
@@ -314,7 +382,7 @@ def highlights(
 
 
 # ============================================================
-# 7. RULE-BASED WARNING FLAGS
+# 10. RULE-BASED WARNING FLAGS
 # ============================================================
 
 RULES = [
@@ -395,7 +463,7 @@ def rule_flags(text: str):
 
 
 # ============================================================
-# 8. MAIN PREDICTION FUNCTION
+# 11. MAIN PREDICTION FUNCTION
 # ============================================================
 
 def predict(text: str) -> dict:
@@ -403,18 +471,12 @@ def predict(text: str) -> dict:
     text = str(text).strip()
 
     if not text:
-        raise ValueError(
-            "Message cannot be empty"
-        )
+        raise ValueError("Message cannot be empty")
 
     if len(text) > 2000:
-        raise ValueError(
-            "Message is too long"
-        )
+        raise ValueError("Message is too long")
 
-    # --------------------------------------------------------
-    # A. GET MODEL PROBABILITIES
-    # --------------------------------------------------------
+    # A. MODEL PROBABILITIES
 
     probabilities = probs([text])[0]
 
@@ -422,12 +484,9 @@ def predict(text: str) -> dict:
         probabilities[LEGIT]
     )
 
-    # Total probability of all scam classes
     scam_probability = 1.0 - legit_probability
 
-    # --------------------------------------------------------
-    # B. MODEL-BASED CLASSIFICATION
-    # --------------------------------------------------------
+    # B. MODEL CLASSIFICATION
 
     is_scam = scam_probability >= THRESHOLD
 
@@ -445,33 +504,25 @@ def predict(text: str) -> dict:
     if is_scam:
 
         best_index = best_scam_index
-
         label = LABELS[best_index]
 
     else:
 
         best_index = LEGIT
-
         label = "legit"
 
-    # The selected class probability comes directly
-    # from the trained model.
     type_probability = float(
         probabilities[best_index]
     )
 
-    # --------------------------------------------------------
     # C. SCAM SCORE
-    # --------------------------------------------------------
 
     score = round(
         scam_probability * 100,
         2,
     )
 
-    # --------------------------------------------------------
-    # D. ADDITIONAL WARNING FLAGS
-    # --------------------------------------------------------
+    # D. WARNING FLAGS
 
     flags = rule_flags(text)
 
@@ -492,10 +543,7 @@ def predict(text: str) -> dict:
 
     if is_scam:
 
-        main_label = TYPE_NAMES.get(
-            label,
-            label,
-        )
+        main_label = TYPE_NAMES.get(label, label)
 
         if not any(
             flag["label"] == main_label
@@ -508,9 +556,7 @@ def predict(text: str) -> dict:
                 "count": 1,
             })
 
-    # --------------------------------------------------------
     # E. HIGHLIGHTS
-    # --------------------------------------------------------
 
     highlighted_words = (
         highlights(text)
@@ -518,25 +564,18 @@ def predict(text: str) -> dict:
         else []
     )
 
-    # --------------------------------------------------------
     # F. RISK LEVEL
-    # --------------------------------------------------------
 
     if score >= 61:
-
         risk_level = "High Risk"
 
     elif score >= 31:
-
         risk_level = "Medium Risk"
 
     else:
-
         risk_level = "Low Risk"
 
-    # --------------------------------------------------------
     # G. FINAL MESSAGE
-    # --------------------------------------------------------
 
     if is_scam:
 
@@ -552,9 +591,7 @@ def predict(text: str) -> dict:
             "Nothing suspicious was detected."
         )
 
-    # --------------------------------------------------------
     # H. API RESPONSE
-    # --------------------------------------------------------
 
     return {
 
@@ -568,10 +605,7 @@ def predict(text: str) -> dict:
 
         "type": label,
 
-        "type_label": TYPE_NAMES.get(
-            label,
-            label,
-        ),
+        "type_label": TYPE_NAMES.get(label, label),
 
         "type_probability": round(
             type_probability * 100,
@@ -593,14 +627,14 @@ def predict(text: str) -> dict:
 
 
 # ============================================================
-# 9. MODEL WARM-UP
+# 12. MODEL WARM-UP
 # ============================================================
 
 predict("hello")
 
-print(
-    "XLM-RoBERTa Scam Detector Loaded Successfully"
-)
+print("XLM-RoBERTa Scam Detector Loaded Successfully")
+
+print("Model repository:", HF_MODEL_REPO)
 
 print("Model directory:", MODEL_DIR)
 
