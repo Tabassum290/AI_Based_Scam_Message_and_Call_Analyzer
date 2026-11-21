@@ -1,0 +1,40 @@
+
+# Python virtual environments
+backend/venv/
+backend/venv312/
+backend/.venv/
+
+# Environment files
+.env
+.env.*
+backend/.env
+fraudsheild-frontend/.env
+
+# Python cache
+__pycache__/
+backend/__pycache__/
+*.py[cod]
+
+# Frontend dependencies
+node_modules/
+fraudsheild-frontend/node_modules/
+
+# Build files
+dist/
+fraudsheild-frontend/dist/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Hugging Face hosted model
+backend/xlm-roberta-base/
