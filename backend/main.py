@@ -24,12 +24,15 @@ app = FastAPI(
 # Set FRONTEND_ORIGINS in deployment environment.
 # Example:
 # FRONTEND_ORIGINS=https://your-frontend.com,http://localhost:5173
-
 origins = os.getenv(
     "FRONTEND_ORIGINS",
-    "http://localhost:5173,http://localhost:3000",
+    "http://localhost:5173,"
+    "http://localhost:5174,"
+    "http://localhost:3000,"
+    "http://127.0.0.1:5173,"
+    "http://127.0.0.1:5174,"
+    "http://127.0.0.1:3000",
 )
-
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in origins.split(",")
