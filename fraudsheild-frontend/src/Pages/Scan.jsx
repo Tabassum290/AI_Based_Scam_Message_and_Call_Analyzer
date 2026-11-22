@@ -1,4 +1,7 @@
-// Front-end only scam checker (simple keyword rules). Swap analyze() for an API call later.
+// Shared constants for the scan result UI.
+// The prediction itself now comes from the FastAPI model (see api.js).
+// analyze() and RULES below are the old offline demo and are no longer used by the pages.
+
 export const RULES = [
   [/urgent(ly)?|immediately|act now|last warning|within \d+ (hours?|minutes?)/gi, 18, "Pressure to act fast"],
   [/\botp\b|\bpin\b|password|\bcvv\b|one[- ]time (code|password)/gi, 30, "Asks for a secret code"],
@@ -11,17 +14,20 @@ export const RULES = [
 export const SAMPLE =
   "URGENT: Your account is suspended due to unusual activity. Verify your account within 2 hours at http://secure-bank-verify.example and reply with the OTP we sent you.";
 
+// Labels match the backend's risk_level text ("Low Risk", "Medium Risk", "High Risk"),
+// so RiskPill can look up its colours either from the API or from a score.
 // Full class names are written out so Tailwind can detect them.
 export const LEVELS = {
-  low: { label: "Low risk", pill: "bg-success/15 text-success", stroke: "stroke-success",
+  low: { label: "Low Risk", pill: "bg-success/15 text-success", stroke: "stroke-success",
     advice: "Nothing here looks unusual. Stay careful with links from unknown senders." },
-  med: { label: "Medium risk", pill: "bg-warning/20 text-warning", stroke: "stroke-warning",
+  med: { label: "Medium Risk", pill: "bg-warning/20 text-warning", stroke: "stroke-warning",
     advice: "Some warning signs. Don’t click links or reply. Contact the company using a number you already trust." },
-  high: { label: "High risk", pill: "bg-error/15 text-error", stroke: "stroke-error",
+  high: { label: "High Risk", pill: "bg-error/15 text-error", stroke: "stroke-error",
     advice: "This looks like a scam. Don’t reply, click, or share codes. Report it so others are warned." },
 };
 
-export const levelKey = (score) => (score < 25 ? "low" : score < 55 ? "med" : "high");
+// Same cutoffs as the backend (model_service.py): Low under 31, Medium 31-60, High 61 and above.
+export const levelKey = (score) => (score < 31 ? "low" : score < 61 ? "med" : "high");
 
 export function analyze(text) {
   let score = 0;

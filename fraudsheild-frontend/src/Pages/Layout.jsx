@@ -58,7 +58,7 @@ export default function Layout() {
 
         <aside className="flex min-h-full w-60 flex-col bg-primary p-4 text-primary-content">
 
-          <div className="font-heading px-3 pb-5 text-xl font-bold text-white py-6 text-2xl">
+          <div className="font-heading px-3 pb-5 font-bold text-white py-6 text-2xl">
             FraudShield
           </div>
 
