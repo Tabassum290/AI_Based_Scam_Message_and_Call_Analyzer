@@ -108,8 +108,8 @@ export default function Reports() {
             {error && <p role="alert" className="text-sm text-error">{error}</p>}
             {done && <p role="status" className="text-sm text-success">Report submitted. Thank you for helping others.</p>}
 
-            <button className="btn btn-primary mt-3 w-fit text-white" onClick={submit} disabled={saving}>
-              {saving ? "Submitting…" : "Submit report"}
+            <button className="btn btn-primary mt-3 w-fit text-blue-800 px-2" onClick={submit} disabled={saving}>
+              {saving ? "Submitting…" : "Submit Report"}
             </button>
           </div>
         </div>
